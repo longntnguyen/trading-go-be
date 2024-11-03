@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -53,6 +54,7 @@ func main(){
 
     userService := controller.UserService{MongoCollection: coll}
     router := gin.Default()
+    router.Use(cors.Default())
     router.GET("/todo", func(c *gin.Context){
         c.IndentedJSON(http.StatusOK, todoList)
     })
