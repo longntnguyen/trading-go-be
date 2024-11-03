@@ -63,6 +63,9 @@ func main(){
     router.GET(("user"), func(c *gin.Context){ 
         userService.GetUserByEmail(c.Writer, c.Request)
     })
+    router.GET(("login"), func(c *gin.Context){
+        fmt.Println("AAAAAAAAAA")
+    })
     router.POST(("login"), func(c *gin.Context){
         userService.Login(c.Writer, c.Request)
     })
