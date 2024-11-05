@@ -117,6 +117,7 @@ func GetTokenPrice(tokenSymbol string) (*big.Float, error) {
     if err := json.Unmarshal(resp.Body(), &binanceResponse); err != nil {
         return nil, fmt.Errorf("failed to parse Binance response: %v", err)
     }
+    fmt.Println(binanceResponse.Price, "price")
 
     price, _, err := big.ParseFloat(binanceResponse.Price, 10, 0, big.ToNearestEven)
     fmt.Println(price, tokenSymbol)
