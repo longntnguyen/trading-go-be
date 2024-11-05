@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/go-resty/resty/v2"
 )
 
 // CreateAccount creates a new Ethereum account and returns the address and private key
@@ -46,7 +48,7 @@ func CreateAccount(password string) (string, string, error) {
 } 
 
 // TokenBalance retrieves the balance of a specific token for a given account
-func TokenBalance(contractAddress, accountAddress string) (*big.Int, error) {
+func TokenBalance(contractAddress, accountAddress string) (*big.Float, error) {
     // Connect to the Ethereum client
     client, err := ethclient.Dial(os.Getenv("CLIENT_URL"))
     if err != nil {
@@ -81,8 +83,40 @@ func TokenBalance(contractAddress, accountAddress string) (*big.Int, error) {
     balance := new(big.Int)
     balance.SetBytes(result) 
 
-    divisor := big.NewInt(1000000000000000000)
-    balance.Div(balance, divisor)
+    divisor := big.NewFloat(1000000000000000000)
+    balanceFloat := new(big.Float).SetInt(balance)
+    balanceFloat.Quo(balanceFloat, divisor)
+    return balanceFloat, nil
+}
+
+type CoinMarketCapResponse struct {
+    Data map[string]struct {
+        Quote map[string]struct {
+            Price float64 `json:"price"`
+        } `json:"quote"`
+    } `json:"data"`
+}
+
+func GetTokenPrice(tokenSymbol string) (*big.Float, error) {
+    apiKey := os.Getenv("COINMARKETCAP_API_KEY")
+    clientResty := resty.New()
+    resp, err := clientResty.R().
+        SetHeader("X-CMC_PRO_API_KEY", apiKey).
+        SetQueryParams(map[string]string{
+            "symbol": tokenSymbol,
+            "convert": "USD",
+        }).
+        Get("https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest")
+    if err != nil {
+        return nil, fmt.Errorf("failed to get token price: %v", err)
+    }
     
-    return balance, nil
+    var cmcResponse CoinMarketCapResponse
+    if err := json.Unmarshal(resp.Body(), &cmcResponse); err != nil {
+        return nil, fmt.Errorf("failed to parse CoinMarketCap response: %v", err)
+    }
+
+    price := cmcResponse.Data[tokenSymbol].Quote["USD"].Price
+
+    return big.NewFloat(price), nil
 }

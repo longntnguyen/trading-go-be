@@ -1,5 +1,7 @@
 package model
 
+import "math/big"
+
 type User struct {
 	UserID			string		`json:"user_id" bson:"user_id"`
 	Name			string		`json:"name" bson:"name"`
@@ -27,6 +29,7 @@ type GetUserInfoResponse struct {
 }
 
 type TokenBalance struct {
-	Name		string	`json:"name"	  bson:"name"`
-	Balance		string	`json:"balance"   bson:"balance"`
+	TokenName		string		`json:"tokenName" bson:"tokenName"`
+	Balance			big.Float	`json:"balance" bson:"balance"`
+	BalanceInUSD	big.Float	`json:"balanceInUSD" bson:"balanceInUSD"`
 }

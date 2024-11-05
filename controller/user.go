@@ -150,9 +150,14 @@ func GetUserInfo() gin.HandlerFunc{
 			if errorBalance != nil {
 				log.Fatal("Error getting token balance: ", errorBalance)
 			}
+			balanceInUSD, errorPrice := services.GetTokenPrice(token.Symbol)
+			if errorPrice != nil {
+				log.Fatal("Error getting token price: ", errorPrice)
+			}
 			userInfoResponse.TokenBalance = append(userInfoResponse.TokenBalance, model.TokenBalance{
-				Name: token.Name,
-				Balance: tokenBalance.String(),
+				TokenName: token.Name,
+				Balance: *tokenBalance,
+				BalanceInUSD: *balanceInUSD,
 			})
 		}
 	
