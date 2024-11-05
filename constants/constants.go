@@ -10,7 +10,7 @@ var TOKEN_LIST = []Token{
 	{
 		Name: "BNB",
 		Address: "0xb8c77482e45f1f44de1745f52c74426c631bdd52",
-		Symbol: "ETH",
+		Symbol: "BNB",
 	},
 	{
 		Name: "SHIBA",
