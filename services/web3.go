@@ -100,6 +100,7 @@ type CoinMarketCapResponse struct {
 func GetTokenPrice(tokenSymbol string) (*big.Float, error) {
     apiKey := os.Getenv("BINANCE_API_KEY")
     clientResty := resty.New()
+    fmt.Println("Begin to get token")
     resp, err := clientResty.R().
         SetHeader("X-MBX-APIKEY", apiKey).
         SetQueryParams(map[string]string{
