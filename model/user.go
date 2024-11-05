@@ -5,17 +5,28 @@ type User struct {
 	Name			string		`json:"name" bson:"name"`
 	Email			string		`json:"email" bson:"email"`
 	Password		string		`json:"password" bson:"password"`
+	PrivateKey		string		`json:"private_key" bson:"private_key"`
 	WalletAddress	string		`json:"wallet_address" bson:"wallet_address"`
 }
 
 type UserLoginResponse struct {
 	Email			string	`json:"email" bson:"email"`
 	Name			string	`json:"name" bson:"name"`
-	UserID			string	`json:"user_id" bson:"user_id"`
-	WalletAddress	string	`json:"wallet_address" bson:"wallet_address"`
+	UserID			string	`json:"userId" bson:"user_id"`
+	WalletAddress	string	`json:"walletAddress" bson:"wallet_address"`
 }
 
 type LoginResponse struct {
 	Token	string				`json:"token" bson:"token"`
 	User	UserLoginResponse	`json:"user" bson:"user"`
+}
+
+type GetUserInfoResponse struct {
+	User			UserLoginResponse	`json:"user" bson:"user"`
+	TokenBalance	[]TokenBalance		`json:"tokenBalance" bson:"tokenBalance"`
+}
+
+type TokenBalance struct {
+	Name		string	`json:"name"	  bson:"name"`
+	Balance		string	`json:"balance"   bson:"balance"`
 }
