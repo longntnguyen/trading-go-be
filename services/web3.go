@@ -2,12 +2,12 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
 	"strings"
 
+	"github.com/adshao/go-binance/v2"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -15,8 +15,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/go-resty/resty/v2"
 )
+
+var binanceClient = binance.NewClient(os.Getenv("BINANCE_API_KEY"), os.Getenv("BINANCE_API_SECRET"))
 
 // CreateAccount creates a new Ethereum account and returns the address and private key
 func CreateAccount(password string) (string, string, error) {
@@ -98,31 +99,16 @@ type CoinMarketCapResponse struct {
 }
 
 func GetTokenPrice(tokenSymbol string) (*big.Float, error) {
-    apiKey := os.Getenv("BINANCE_API_KEY")
-    clientResty := resty.New()
-    fmt.Println("Begin to get token")
-    resp, err := clientResty.R().
-        SetHeader("X-MBX-APIKEY", apiKey).
-        SetQueryParams(map[string]string{
-            "symbol": tokenSymbol + "USDT",
-        }).
-        Get("https://api.binance.com/api/v3/ticker/price")
+    prices, err := binanceClient.NewListPricesService().Symbol(tokenSymbol + "USDT").Do(context.Background())
     if err != nil {
         return nil, fmt.Errorf("failed to get token price: %v", err)
     }
-    
-    var binanceResponse struct {
-        Price string `json:"price"`
-        Symbol string `json:"symbol"`
-    }
-    if err := json.Unmarshal(resp.Body(), &binanceResponse); err != nil {
-        return nil, fmt.Errorf("failed to parse Binance response: %v", err)
-    }
-    fmt.Println(resp.Body(), "price")
-    fmt.Println(binanceResponse, "price")
 
-    price, _, err := big.ParseFloat(binanceResponse.Price, 10, 0, big.ToNearestEven)
-    fmt.Println(price, tokenSymbol)
+    if len(prices) == 0 {
+        return nil, fmt.Errorf("no price data returned for symbol: %s", tokenSymbol)
+    }
+
+    price, _, err := big.ParseFloat(prices[0].Price, 10, 0, big.ToNearestEven)
     if err != nil {
         return nil, fmt.Errorf("failed to parse price: %v", err)
     }
