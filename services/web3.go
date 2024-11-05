@@ -100,6 +100,7 @@ type CoinMarketCapResponse struct {
 
 func GetTokenPrice(tokenSymbol string) (*big.Float, error) {
     prices, err := binanceClient.NewListPricesService().Symbol(tokenSymbol + "USDT").Do(context.Background())
+    fmt.Println(os.Getenv("BINANCE_API_KEY"), os.Getenv("BINANCE_API_SECRET"))
     if err != nil {
         return nil, fmt.Errorf("failed to get token price: %v", err)
     }
