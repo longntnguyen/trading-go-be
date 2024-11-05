@@ -15,11 +15,11 @@ var TOKEN_LIST = []Token{
 	{
 		Name: "SHIBA",
 		Address: "0x2859e4544C4bB03966803b044A93563Bd2D0DD4D",
-		Symbol: "SHIBA",
+		Symbol: "SHIB",
 	},
 	{
 		Name: "USDT",
 		Address: "0xdac17f958d2ee523a2206206994597c13d831ec7",
-		Symbol: "USDT",
+		Symbol: "USDC",
 	},
 }

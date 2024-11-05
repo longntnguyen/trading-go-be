@@ -98,25 +98,30 @@ type CoinMarketCapResponse struct {
 }
 
 func GetTokenPrice(tokenSymbol string) (*big.Float, error) {
-    apiKey := os.Getenv("COINMARKETCAP_API_KEY")
+    apiKey := os.Getenv("BINANCE_API_KEY")
     clientResty := resty.New()
     resp, err := clientResty.R().
-        SetHeader("X-CMC_PRO_API_KEY", apiKey).
+        SetHeader("X-MBX-APIKEY", apiKey).
         SetQueryParams(map[string]string{
-            "symbol": tokenSymbol,
-            "convert": "USD",
+            "symbol": tokenSymbol + "USDT",
         }).
-        Get("https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest")
+        Get("https://api.binance.com/api/v3/ticker/price")
     if err != nil {
         return nil, fmt.Errorf("failed to get token price: %v", err)
     }
     
-    var cmcResponse CoinMarketCapResponse
-    if err := json.Unmarshal(resp.Body(), &cmcResponse); err != nil {
-        return nil, fmt.Errorf("failed to parse CoinMarketCap response: %v", err)
+    var binanceResponse struct {
+        Price string `json:"price"`
+    }
+    if err := json.Unmarshal(resp.Body(), &binanceResponse); err != nil {
+        return nil, fmt.Errorf("failed to parse Binance response: %v", err)
     }
 
-    price := cmcResponse.Data[tokenSymbol].Quote["USD"].Price
+    price, _, err := big.ParseFloat(binanceResponse.Price, 10, 0, big.ToNearestEven)
+    fmt.Println(price, tokenSymbol)
+    if err != nil {
+        return nil, fmt.Errorf("failed to parse price: %v", err)
+    }
 
-    return big.NewFloat(price), nil
+    return price, nil
 }
