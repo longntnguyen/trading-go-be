@@ -10,22 +10,30 @@ import (
 )
 
 func init() {
-    err := godotenv.Load()
-    if err != nil {
-        log.Fatal("Error loading .env file")
-    }
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 
-    if err != nil {
-        log.Fatal(err)
-    } 
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
-func main(){ 
-    router := gin.Default()
-    router.Use(cors.Default())
-    authRoutes := router.Group("/api/auth/")
-    authRoutes.Use(cors.Default())
-    routes.UserAuthRoutes(authRoutes) 
-    routes.UsePublicRoutes(router)
-    router.Run() 
+func CORSConfig() cors.Config {
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowOrigins = []string{"http://localhost:3000"}
+	corsConfig.AllowCredentials = true
+	corsConfig.AddAllowHeaders("Access-Control-Allow-Headers", "access-control-allow-origin, access-control-allow-headers", "Content-Type", "X-XSRF-TOKEN", "Accept", "Origin", "X-Requested-With", "Authorization")
+	corsConfig.AddAllowMethods("GET", "POST", "PUT", "DELETE")
+	return corsConfig
+}
+
+func main() {
+	router := gin.Default()
+	router.Use(cors.New(CORSConfig()))
+	authRoutes := router.Group("/api/auth/")
+	routes.UserAuthRoutes(authRoutes)
+	routes.UsePublicRoutes(router)
+	router.Run()
 }
