@@ -2,7 +2,10 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"math"
+	"math/big"
 	"my-app/constants"
 	"my-app/database"
 	"my-app/model"
@@ -43,10 +46,54 @@ func SignUp() gin.HandlerFunc {
 			res.Error = err.Error()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
+
+		if emp.Email == "" || emp.Password == ""  {
+			c.Writer.WriteHeader(http.StatusBadRequest)
+			log.Println("Missing required fields")
+			res.Error = "Missing required fields"
+			return
+			
+		}
+		var user model.User
+		err = userCollection.FindOne(context.Background(), bson.D{{Key: "email", Value: emp.Email}}).Decode(&user)
+		if err == nil {
+			c.Writer.WriteHeader(http.StatusBadRequest)
+			log.Println("Email already exists")
+			res.Error = "Email already exists"
+			return
+		}
+
+		hashedPassword, err := services.HashPassword(emp.Password)
+		if err != nil {
+			c.Writer.WriteHeader(http.StatusInternalServerError)
+			log.Println("Error hashing password: ", err)
+			res.Error = err.Error()
+			return
+		}
+
+		walletAddress, privateKey, err := services.CreateAccount(hashedPassword)
+		if err != nil {
+			c.Writer.WriteHeader(http.StatusInternalServerError)
+			log.Println("Error creating account: ", err)
+			res.Error = err.Error()
+			return
+		}
 	
 		emp.UserID = uuid.New().String()
-		createdUser, err := userCollection.InsertOne(context.Background(), &emp) 
-	
+		emp.Password = hashedPassword
+		emp.WalletAddress = walletAddress
+		emp.PrivateKey = privateKey
+		_, err = userCollection.InsertOne(context.Background(), &emp) 
+		var newUser model.User
+		fmt.Println(emp, "emp")
+		newUserErr := userCollection.FindOne(context.Background(), bson.D{{Key: "user_id", Value: emp.UserID}}).Decode(&newUser)
+		if newUserErr != nil {
+			c.Writer.WriteHeader(http.StatusInternalServerError)
+			log.Println("Error finding user: ", newUserErr)
+			res.Error = newUserErr.Error() 
+			c.JSON(http.StatusInternalServerError, gin.H{"error": newUserErr.Error()})
+			
+		}
 		if err != nil {
 			c.Writer.WriteHeader(http.StatusInternalServerError)
 			log.Println("Error creating user: ", err)
@@ -54,7 +101,23 @@ func SignUp() gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
 	
-		res.Data = createdUser
+		token, err := services.CreateToken(newUser.UserID)
+		if err != nil {
+			c.Writer.WriteHeader(http.StatusInternalServerError)
+			log.Println("Error creating token: ", err)
+			res.Error = err.Error()
+			return
+		}
+
+		res.Data = model.LoginResponse{
+			Token: token,
+			User: model.UserLoginResponse{
+				Email: newUser.Email,
+				Name: newUser.Name,
+				UserID: newUser.UserID,
+				WalletAddress: newUser.WalletAddress,
+			},
+		}
 		c.Writer.WriteHeader(http.StatusOK) 
 	}
 }
@@ -86,8 +149,8 @@ func Login() gin.HandlerFunc {
 	
 		if !validPassword {
 			c.Writer.WriteHeader(http.StatusUnauthorized)
-			log.Println("Invalid password")
-			res.Error = "Invalid password" 
+			log.Println("Incorrect password")
+			res.Error = "Incorrect password" 
 			return
 		}
 	
@@ -145,17 +208,32 @@ func GetUserInfo() gin.HandlerFunc{
 			},
 		}
 
+		var symbols []string
+		for _, token := range constants.TOKEN_LIST {
+			symbols = append(symbols, token.Symbol)
+		}
+		listTokenInfo, tokenPricesErr := services.GetTokenPrice(symbols)
+		if tokenPricesErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": tokenPricesErr.Error()})
+			log.Fatal("Error getting token prices: ", tokenPricesErr)
+			
+		}
+
 		for _, token := range constants.TOKEN_LIST {
 			tokenBalance, errorBalance := services.TokenBalance(token.Address, user.WalletAddress)
 			if errorBalance != nil {
 				log.Fatal("Error getting token balance: ", errorBalance)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": errorBalance.Error()})
 			}
-			balanceInUSD, errorPrice := services.GetTokenPrice(token.Symbol)
-			if errorPrice != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": errorPrice.Error()})
-				log.Fatal("Error getting token price: ", errorPrice)
+			balanceInUSD := new(big.Float)
+			for _, tokenInfo := range listTokenInfo {
+				if token.Symbol == tokenInfo.Symbol {
+					balanceFloat64, _ := tokenInfo.Balance.Float64()
+					balanceInUSD.SetFloat64(balanceFloat64)
+				}
 			}
+			balanceInUSDFloat, _ := balanceInUSD.Float64()
+			balanceInUSD.SetFloat64(math.Round(balanceInUSDFloat*1e6) / 1e6)
 			userInfoResponse.TokenBalance = append(userInfoResponse.TokenBalance, model.TokenBalance{
 				TokenName: token.Name,
 				Balance: *tokenBalance,

@@ -5,7 +5,7 @@ import "math/big"
 type User struct {
 	UserID			string		`json:"user_id" bson:"user_id"`
 	Name			string		`json:"name" bson:"name"`
-	Email			string		`json:"email" bson:"email"`
+	Email			string		`json:"email" bson:"email,unique"`
 	Password		string		`json:"password" bson:"password"`
 	PrivateKey		string		`json:"private_key" bson:"private_key"`
 	WalletAddress	string		`json:"wallet_address" bson:"wallet_address"`

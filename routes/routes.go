@@ -8,11 +8,12 @@ import (
 )
 
 func UserAuthRoutes(router *gin.RouterGroup) {
-    router.Use(middleware.Authenticate())
+	router.Use(middleware.Authenticate())
 	router.GET("/user", controller.GetUserInfo())
+	router.GET("/overview", controller.GetOverView())
 }
 
-func UsePublicRoutes(router *gin.Engine) { 
+func UsePublicRoutes(router *gin.Engine) {
 	router.POST("/register", controller.SignUp())
 	router.POST("/login", controller.Login())
 }

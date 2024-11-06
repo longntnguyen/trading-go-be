@@ -2,12 +2,14 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
+	"my-app/model"
+	"net/http"
 	"os"
 	"strings"
 
-	"github.com/adshao/go-binance/v2"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -17,102 +19,117 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-var binanceClient = binance.NewClient(os.Getenv("BINANCE_API_KEY"), os.Getenv("BINANCE_API_SECRET"))
-
 // CreateAccount creates a new Ethereum account and returns the address and private key
 func CreateAccount(password string) (string, string, error) {
-    // Generate a new key
-    key, err := crypto.GenerateKey()
-    if err != nil {
-        return "", "", fmt.Errorf("failed to generate key: %v", err)
-    }
+	// Generate a new key
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate key: %v", err)
+	}
 
-    // Convert the key to an account
-    account := accounts.Account{
-        Address: crypto.PubkeyToAddress(key.PublicKey),
-    }
+	// Convert the key to an account
+	account := accounts.Account{
+		Address: crypto.PubkeyToAddress(key.PublicKey),
+	}
 
-    // Create a keystore to store the account
-    ks := keystore.NewKeyStore("./keystore", keystore.StandardScryptN, keystore.StandardScryptP)
-    if _, err := ks.ImportECDSA(key, password); err != nil {
-        return "", "", fmt.Errorf("failed to import key to keystore: %v", err)
-    }
+	// Create a keystore to store the account
+	ks := keystore.NewKeyStore("./keystore", keystore.StandardScryptN, keystore.StandardScryptP)
+	if _, err := ks.ImportECDSA(key, password); err != nil {
+		return "", "", fmt.Errorf("failed to import key to keystore: %v", err)
+	}
 
-    // Return the account address and private key
+	// Return the account address and private key
 	privateKey := fmt.Sprintf("%x", crypto.FromECDSA(key))
 
 	// Delete the file in keystore after getting the private key
 	if err := ks.Delete(account, password); err != nil {
 		return "", "", fmt.Errorf("failed to delete key from keystore: %v", err)
 	}
-    return account.Address.Hex(), privateKey, nil
-} 
+	return account.Address.Hex(), privateKey, nil
+}
 
 // TokenBalance retrieves the balance of a specific token for a given account
 func TokenBalance(contractAddress, accountAddress string) (*big.Float, error) {
-    // Connect to the Ethereum client
-    client, err := ethclient.Dial(os.Getenv("CLIENT_URL"))
-    if err != nil {
-        return nil, fmt.Errorf("failed to connect to the Ethereum client: %v", err)
-    }
+	// Connect to the Ethereum client
+	client, err := ethclient.Dial(os.Getenv("CLIENT_URL"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to the Ethereum client: %v", err)
+	}
 
-    // Load the contract ABI
-    contractABI, err := abi.JSON(strings.NewReader(`[{"constant":true,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"}, {"constant": true, "input":[], "name":"decimals", "outputs": [{"name":"", "type": "uint8"}], "type": "function"}]`))
-    if err != nil {
-        return nil, fmt.Errorf("failed to parse contract ABI: %v", err)
-    }
+	// Load the contract ABI
+	contractABI, err := abi.JSON(strings.NewReader(`[{"constant":true,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"}, {"constant": true, "input":[], "name":"decimals", "outputs": [{"name":"", "type": "uint8"}], "type": "function"}]`))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse contract ABI: %v", err)
+	}
 
-    // Create a call message
-    callMsg := ethereum.CallMsg{
-        To:   &common.Address{},
-        Data: contractABI.Methods["balanceOf"].ID,
-    }
+	// Create a call message
+	callMsg := ethereum.CallMsg{
+		To:   &common.Address{},
+		Data: contractABI.Methods["balanceOf"].ID,
+	}
 
-    // Set the contract address and account address
-    contractAddr := common.HexToAddress(contractAddress)
-    accountAddr := common.HexToAddress(accountAddress)
-    callMsg.To = &contractAddr
-    callMsg.Data = append(callMsg.Data, common.LeftPadBytes(accountAddr.Bytes(), 32)...)
+	// Set the contract address and account address
+	contractAddr := common.HexToAddress(contractAddress)
+	accountAddr := common.HexToAddress(accountAddress)
+	callMsg.To = &contractAddr
+	callMsg.Data = append(callMsg.Data, common.LeftPadBytes(accountAddr.Bytes(), 32)...)
 
-    // Call the contract
-    result, err := client.CallContract(context.Background(), callMsg, nil)
-    if err != nil {
-        return nil, fmt.Errorf("failed to call contract: %v", err)
-    }
+	// Call the contract
+	result, err := client.CallContract(context.Background(), callMsg, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call contract: %v", err)
+	}
 
-    // Parse the result
-    balance := new(big.Int)
-    balance.SetBytes(result) 
+	// Parse the result
+	balance := new(big.Int)
+	balance.SetBytes(result)
 
-    divisor := big.NewFloat(1000000000000000000)
-    balanceFloat := new(big.Float).SetInt(balance)
-    balanceFloat.Quo(balanceFloat, divisor)
-    return balanceFloat, nil
+	divisor := big.NewFloat(1000000000000000000)
+	balanceFloat := new(big.Float).SetInt(balance)
+	balanceFloat.Quo(balanceFloat, divisor)
+	return balanceFloat, nil
 }
 
-type CoinMarketCapResponse struct {
-    Data map[string]struct {
-        Quote map[string]struct {
-            Price float64 `json:"price"`
-        } `json:"quote"`
-    } `json:"data"`
-}
+func GetTokenPrice(tokenSymbol []string) ([]model.TokenBalanceInfo, error) {
+	apiKey := os.Getenv("COINMARKETCAP_API_KEY")
+	url := fmt.Sprintf("https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=%s", strings.Join(tokenSymbol, ","))
 
-func GetTokenPrice(tokenSymbol string) (*big.Float, error) {
-    prices, err := binanceClient.NewListPricesService().Symbol(tokenSymbol + "USDT").Do(context.Background())
-    fmt.Println(os.Getenv("BINANCE_API_KEY"), os.Getenv("BINANCE_API_SECRET"))
-    if err != nil {
-        return nil, fmt.Errorf("failed to get token price: %v", err)
-    }
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Add("X-CMC_PRO_API_KEY", apiKey)
 
-    if len(prices) == 0 {
-        return nil, fmt.Errorf("no price data returned for symbol: %s", tokenSymbol)
-    }
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
 
-    price, _, err := big.ParseFloat(prices[0].Price, 10, 0, big.ToNearestEven)
-    if err != nil {
-        return nil, fmt.Errorf("failed to parse price: %v", err)
-    }
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 
-    return price, nil
+	var cmcResponse model.CoinMarketCapResponse
+	if err := json.NewDecoder(resp.Body).Decode(&cmcResponse); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %v", err)
+	}
+
+	listTokenInfo := []model.TokenBalanceInfo{}
+
+	for symbol, data := range cmcResponse.Data {
+		quote, ok := data.Quote["USD"]
+		if !ok {
+			return nil, fmt.Errorf("no USD quote for token symbol: %s", symbol)
+		}
+
+		price := big.NewFloat(quote.Price)
+		percentChange24H := big.NewFloat(quote.PercentChange24h)
+		volume24h := big.NewFloat(quote.Volume24h)
+		marketCap := big.NewFloat(quote.MarketCap)
+		listTokenInfo = append(listTokenInfo, model.TokenBalanceInfo{Symbol: symbol, Balance: price, PercentChange24h: percentChange24H, Volume24H: volume24h, MarketCap: marketCap, TokenID: data.ID})
+	}
+
+	return listTokenInfo, nil
 }
