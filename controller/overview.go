@@ -47,10 +47,12 @@ func GetOverView() gin.HandlerFunc {
 		}
 
 		overViewResponse := model.OverViewResponse{
-			TotalBalance:       *big.NewFloat(0),
-			TotalBalanceInUSD:  *big.NewFloat(0),
+			TotalBalance:       0.0,
+			TotalBalanceInUSD:  0.0,
 			TokensOverViewList: []model.TokenOverView{},
 		}
+		totalBalanceInUSD := new(big.Float)
+		balanceInUSCBTC := new(big.Float)
 		for _, token := range constants.TOKEN_LIST {
 			tokenBalance, errorBalance := services.TokenBalance(token.Address, user.WalletAddress)
 			if errorBalance != nil {
@@ -63,6 +65,10 @@ func GetOverView() gin.HandlerFunc {
 			marketCap := new(big.Float)
 			tokenId := new(json.Number)
 			for _, tokenInfo := range listTokenInfo {
+				if tokenInfo.Symbol == "BTC" {
+					balanceFloat64, _ := tokenInfo.Balance.Float64()
+					balanceInUSCBTC.SetFloat64(balanceFloat64)
+				}
 				if token.Symbol == tokenInfo.Symbol {
 					balanceFloat64, _ := tokenInfo.Balance.Float64()
 					balanceInUSD.SetFloat64(balanceFloat64)
@@ -75,7 +81,8 @@ func GetOverView() gin.HandlerFunc {
 					tokenId = &tokenInfo.TokenID
 				}
 			}
-
+			tokenBalanceInUSD := new(big.Float).Mul(tokenBalance, balanceInUSD)
+			totalBalanceInUSD.Add(totalBalanceInUSD, tokenBalanceInUSD)
 			overViewResponse.TokensOverViewList = append(overViewResponse.TokensOverViewList, model.TokenOverView{
 				TokenName:        token.Name,
 				Balance:          *tokenBalance,
@@ -87,6 +94,12 @@ func GetOverView() gin.HandlerFunc {
 				Symbol:           token.Symbol,
 				ImageUrl:         fmt.Sprintf("https://s2.coinmarketcap.com/static/img/coins/64x64/%s.png", tokenId),
 			})
+		}
+		totalBalanceInUSDFloat64, _ := totalBalanceInUSD.Float64()
+		overViewResponse.TotalBalanceInUSD = totalBalanceInUSDFloat64
+		if balanceInUSCBTC.Cmp(big.NewFloat(0)) != 0 && totalBalanceInUSDFloat64 != 0 {
+			balanceInUSCBTCFloat64, _ := balanceInUSCBTC.Float64()
+			overViewResponse.TotalBalance = totalBalanceInUSDFloat64 / balanceInUSCBTCFloat64
 		}
 		res.Data = overViewResponse
 		c.Writer.WriteHeader(http.StatusOK)
