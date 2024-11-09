@@ -20,6 +20,7 @@ func UserAuthRoutes(router *gin.RouterGroup) {
 	}))
 	router.GET("/user", controller.GetUserInfo())
 	router.GET("/overview", controller.GetOverView())
+	router.GET("/token-info", controller.GetTokenInfo())
 }
 
 func UsePublicRoutes(router *gin.Engine) {
