@@ -18,8 +18,8 @@ type TokenOverView struct {
 }
 
 type OverViewResponse struct {
-	TotalBalance       big.Float       `json:"totalBalance"`
-	TotalBalanceInUSD  big.Float       `json:"totalBalanceInUSD"`
+	TotalBalance       float64       `json:"totalBalance"`
+	TotalBalanceInUSD  float64       `json:"totalBalanceInUSD"`
 	TokensOverViewList []TokenOverView `json:"tokensOverViewList"`
 }
 
