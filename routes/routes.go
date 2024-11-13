@@ -22,10 +22,10 @@ func UserAuthRoutes(router *gin.RouterGroup) {
 	router.GET("/overview", controller.GetOverView())
 	router.POST("/transfer", controller.TransferToAddress())
 	router.POST("/transfer-fee", controller.GetTransferFee())
-	router.GET("/token-info", controller.GetTokenInfo())
 }
 
 func UsePublicRoutes(router *gin.Engine) {
 	router.POST("/register", controller.SignUp())
 	router.POST("/login", controller.Login())
+	router.GET("/tokens-list", controller.GetTokenInfo())
 }

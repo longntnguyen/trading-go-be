@@ -73,7 +73,7 @@ func GetOverView() gin.HandlerFunc {
 			percentChange24H := new(big.Float)
 			volume24H := new(big.Float)
 			marketCap := new(big.Float)
-			tokenId := new(json.Number)
+			tokenId := new(big.Float)
 			for _, tokenInfo := range listTokenInfo {
 				if tokenInfo.Symbol == "BTC" {
 					balanceFloat64, _ := tokenInfo.Balance.Float64()
@@ -88,7 +88,8 @@ func GetOverView() gin.HandlerFunc {
 					volume24H.SetFloat64(volume24HFloat64)
 					marketCapFloat64, _ := tokenInfo.MarketCap.Float64()
 					marketCap.SetFloat64(marketCapFloat64)
-					tokenId = &tokenInfo.TokenID
+					tokenIdFloat, _ := tokenInfo.TokenID.Float64()
+					tokenId = new(big.Float).SetFloat64(tokenIdFloat)
 				}
 			}
 			tokenBalanceInUSD := new(big.Float).Mul(tokenBalance, balanceInUSD)
@@ -96,7 +97,7 @@ func GetOverView() gin.HandlerFunc {
 			overViewResponse.TokensOverViewList = append(overViewResponse.TokensOverViewList, model.TokenOverView{
 				TokenName:        token.Name,
 				Balance:          *tokenBalance,
-				TokenID:          *tokenId,
+				TokenID:          json.Number(tokenId.Text('f', -1)),
 				BalanceInUSD:     *balanceInUSD,
 				PercentChange24h: *percentChange24H,
 				Volume24H:        *volume24H,

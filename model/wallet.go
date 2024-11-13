@@ -51,16 +51,16 @@ type TokenImage struct {
 }
 
 type ListTokenInfoResponse struct {
-	Page   int
-	Limit  int
-	Result []ListTokenInfo
+	Page   int             `json:"page"`
+	Limit  int             `json:"limit"`
+	Result []ListTokenInfo `json:"result"`
 }
 
 type ListTokenInfo struct {
-	TokenID   int
-	Symbol    string
-	TokenName string
-	ImageUrl  string
+	TokenID   string `json:"tokenID"`
+	Symbol    string `json:"symbol"`
+	TokenName string `json:"tokenName"`
+	ImageUrl  string `json:"imageUrl"`
 }
 
 type CoinMarketCapStatus struct {

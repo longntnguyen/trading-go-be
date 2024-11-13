@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"my-app/model"
@@ -10,7 +9,6 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/bson"
 )
 
 func GetTokenInfo() gin.HandlerFunc {
@@ -18,15 +16,24 @@ func GetTokenInfo() gin.HandlerFunc {
 		c.Writer.Header().Set("Content-Type", "application/json")
 		res := &Response{}
 		defer json.NewEncoder(c.Writer).Encode(res)
-		userId, err := services.GetUserIdFromToken(c.Request.Header.Get("Authorization"))
 
 		page := c.Query("page")
 		limit := c.Query("limit")
-		pageInt, err := strconv.Atoi(page)
+		pageInt, err := strconv.Atoi(func() string {
+			if page == "" {
+				return "1"
+			}
+			return page
+		}())
 		if err != nil {
 			log.Println(c.Writer, "Error parsing paging: %v\n", err)
 		}
-		limitInt, err := strconv.Atoi(limit)
+		limitInt, err := strconv.Atoi(func() string {
+			if limit == "" {
+				return "10"
+			}
+			return limit
+		}())
 		if err != nil {
 			log.Println(c.Writer, "Error parsing limit: %v\n", err)
 		}
@@ -36,12 +43,6 @@ func GetTokenInfo() gin.HandlerFunc {
 			log.Println("Error decoding user: ", err)
 			res.Error = err.Error()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		}
-		var user model.User
-		err = userCollection.FindOne(context.Background(), bson.D{{Key: "user_id", Value: userId}}).Decode(&user)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
 		}
 		tokens, err := services.GetListTokenInfo(pageInt, limitInt)
 		if err != nil {
