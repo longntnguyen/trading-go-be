@@ -20,6 +20,8 @@ func UserAuthRoutes(router *gin.RouterGroup) {
 	}))
 	router.GET("/user", controller.GetUserInfo())
 	router.GET("/overview", controller.GetOverView())
+	router.POST("/transfer", controller.TransferToAddress())
+	router.POST("/transfer-fee", controller.GetTransferFee())
 }
 
 func UsePublicRoutes(router *gin.Engine) {

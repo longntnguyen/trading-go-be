@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"my-app/constants"
 	"my-app/model"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
@@ -57,7 +59,7 @@ func TokenBalance(contractAddress, accountAddress string) (*big.Float, error) {
 	}
 
 	// Load the contract ABI
-	contractABI, err := abi.JSON(strings.NewReader(`[{"constant":true,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"}, {"constant": true, "input":[], "name":"decimals", "outputs": [{"name":"", "type": "uint8"}], "type": "function"}]`))
+	contractABI, err := abi.JSON(strings.NewReader(`[{"constant":true,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"}]`))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse contract ABI: %v", err)
 	}
@@ -83,11 +85,33 @@ func TokenBalance(contractAddress, accountAddress string) (*big.Float, error) {
 	// Parse the result
 	balance := new(big.Int)
 	balance.SetBytes(result)
+	fmt.Println("balance: ", balance, contractAddress, accountAddress)
 
 	divisor := big.NewFloat(1000000000000000000)
 	balanceFloat := new(big.Float).SetInt(balance)
 	balanceFloat.Quo(balanceFloat, divisor)
 	return balanceFloat, nil
+}
+
+func GetBNBBalance(accountAddress string) (*big.Float, error) {
+	// Connect to the BSC client
+	client, err := ethclient.Dial(os.Getenv("CLIENT_URL"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to the BSC client: %v", err)
+	}
+
+	// Get the balance of BNB
+	accountAddr := common.HexToAddress(accountAddress)
+	balance, err := client.BalanceAt(context.Background(), accountAddr, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get BNB balance: %v", err)
+	}
+
+	// Convert the balance from Wei to BNB (assuming 18 decimals)
+	balanceFloat := new(big.Float).SetInt(balance)
+	bnbValue := new(big.Float).Quo(balanceFloat, big.NewFloat(1e18))
+
+	return bnbValue, nil
 }
 
 func GetTokenPrice(tokenSymbol []string) ([]model.TokenBalanceInfo, error) {
@@ -132,4 +156,187 @@ func GetTokenPrice(tokenSymbol []string) ([]model.TokenBalanceInfo, error) {
 	}
 
 	return listTokenInfo, nil
+}
+
+// SendCoin sends a specified amount of Ether from one address to another
+func SendToken(fromAddress, toAddress, privateKeyHex, tokenAddress string, amount *big.Float) (string, error) {
+	// Connect to the Ethereum client
+	client, err := ethclient.Dial(os.Getenv("CLIENT_URL"))
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to the Ethereum client: %v", err)
+	}
+
+	// Convert the private key from hex to ECDSA
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert private key: %v", err)
+	}
+
+	// Get the nonce for the account
+	fromAddr := common.HexToAddress(fromAddress)
+	nonce, err := client.NonceAt(context.Background(), fromAddr, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to get nonce: %v", err)
+	}
+
+	// Check the balance of the sender
+	balance, err := client.BalanceAt(context.Background(), fromAddr, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to get balance: %v", err)
+	}
+
+	// Get the gas price
+	gasPrice, err := client.SuggestGasPrice(context.Background())
+	if err != nil {
+		return "", fmt.Errorf("failed to get gas price: %v", err)
+	}
+
+	// Load the token contract ABI
+	tokenABI, err := abi.JSON(strings.NewReader(`[{"constant":false,"inputs":[{"name":"_to","type":"address"},{"name":"_value","type":"uint256"}],"name":"transfer","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"}]`))
+	if err != nil {
+		return "", fmt.Errorf("failed to parse token contract ABI: %v", err)
+	}
+
+	// Convert amount to *big.Int
+	amountInt := new(big.Int)
+	amount.Mul(amount, big.NewFloat(1e18)).Int(amountInt)
+
+	// Create the transfer data
+	toAddr := common.HexToAddress(toAddress)
+	data, err := tokenABI.Pack("transfer", toAddr, amountInt)
+	if err != nil {
+		return "", fmt.Errorf("failed to pack transfer data: %v", err)
+	}
+
+	// Estimate the gas limit
+	tokenAddr := common.HexToAddress(tokenAddress)
+	msg := ethereum.CallMsg{
+		From: fromAddr,
+		To:   &tokenAddr,
+		Data: data,
+	}
+	gasLimit, err := client.EstimateGas(context.Background(), msg)
+	if err != nil {
+		return "", fmt.Errorf("failed to estimate gas limit: %v", err)
+	}
+
+	// Calculate the total cost (gas limit * gas price)
+	totalCost := new(big.Int).Mul(big.NewInt(int64(gasLimit)), gasPrice)
+
+	// Check if the balance is sufficient
+	if balance.Cmp(totalCost) < 0 {
+		return "", fmt.Errorf("insufficient funds for gas * price + value: balance %v, tx cost %v", balance, totalCost)
+	}
+
+	// Create the transaction
+	tx := types.NewTransaction(nonce, common.HexToAddress(tokenAddress), amountInt, gasLimit, gasPrice, data)
+
+	// Sign the transaction
+	chainID, err := client.NetworkID(context.Background())
+	if err != nil {
+		return "", fmt.Errorf("failed to get chain ID: %v", err)
+	}
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), privateKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign transaction: %v", err)
+	}
+
+	// Send the transaction
+	err = client.SendTransaction(context.Background(), signedTx)
+	if err != nil {
+		return "", fmt.Errorf("failed to send transaction: %v", err)
+	}
+
+	return signedTx.Hash().Hex(), nil
+}
+
+func GetTransferFee(fromAddress, toAddress, privateKeyHex, tokenAddress string, amount *big.Float) (model.GetTransferFeeResponse, error) {
+	client, err := ethclient.Dial(os.Getenv("CLIENT_URL"))
+	if err != nil {
+		return model.GetTransferFeeResponse{}, fmt.Errorf("failed to connect to the Ethereum client: %v", err)
+	}
+
+	// Get the nonce for the account
+	fromAddr := common.HexToAddress(fromAddress)
+
+	// Check the balance of the sender
+	balance, err := client.BalanceAt(context.Background(), fromAddr, nil)
+	if err != nil {
+		return model.GetTransferFeeResponse{}, fmt.Errorf("failed to get balance: %v", err)
+	}
+
+	// Get the gas price
+	gasPrice, err := client.SuggestGasPrice(context.Background())
+	if err != nil {
+		return model.GetTransferFeeResponse{}, fmt.Errorf("failed to get gas price: %v", err)
+	}
+
+	// Load the token contract ABI
+	tokenABI, err := abi.JSON(strings.NewReader(`[{"constant":false,"inputs":[{"name":"_to","type":"address"},{"name":"_value","type":"uint256"}],"name":"transfer","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"}]`))
+	if err != nil {
+		return model.GetTransferFeeResponse{}, fmt.Errorf("failed to parse token contract ABI: %v", err)
+	}
+
+	// Convert amount to *big.Int
+	amountInt := new(big.Int)
+	amount.Mul(amount, big.NewFloat(1e18)).Int(amountInt)
+
+	// Create the transfer data
+	toAddr := common.HexToAddress(toAddress)
+	data, err := tokenABI.Pack("transfer", toAddr, amountInt)
+	if err != nil {
+		return model.GetTransferFeeResponse{}, fmt.Errorf("failed to pack transfer data: %v", err)
+	}
+
+	// Estimate the gas limit
+	tokenAddr := common.HexToAddress(tokenAddress)
+	msg := ethereum.CallMsg{
+		From: fromAddr,
+		To:   &tokenAddr,
+		Data: data,
+	}
+
+	// Find the symbol of the tokenAddress
+	var tokenSymbol string
+	for _, token := range constants.TOKEN_LIST {
+		if token.Address == tokenAddress {
+			tokenSymbol = token.Address
+			break
+		}
+	}
+
+	gasLimit, err := client.EstimateGas(context.Background(), msg)
+	if err != nil {
+		return model.GetTransferFeeResponse{}, fmt.Errorf("failed to estimate gas limit: %v", err)
+	}
+	totalGasFee := new(big.Int).Mul(big.NewInt(int64(gasLimit)), gasPrice)
+
+	// Calculate the total cost (gas limit * gas price)
+	totalCost := new(big.Int).Add(new(big.Int).Mul(big.NewInt(int64(gasLimit)), gasPrice), amountInt)
+
+	if balance.Cmp(totalCost) < 0 {
+		return model.GetTransferFeeResponse{}, fmt.Errorf("insufficient funds for gas * price + value: balance %v, tx cost %v", balance, totalCost)
+	}
+	gasFee := CovertCoinNumber(gasPrice)
+	transactionFee := CovertCoinNumber(totalGasFee)
+	totalBalanceFloat := CovertCoinNumber(totalCost)
+	amountInt = new(big.Int)
+	amount.Int(amountInt)
+	amountFloat := CovertCoinNumber(amountInt)
+	return model.GetTransferFeeResponse{
+		GasFee:         gasFee,
+		TotalBalance:   totalBalanceFloat,
+		Amount:         amountFloat,
+		TokenAddress:   tokenAddress,
+		WalletAddress:  fromAddress,
+		TransactionFee: transactionFee,
+		TokenSymbol:    tokenSymbol,
+	}, nil
+
+}
+
+func CovertCoinNumber(coinNumber *big.Int) float64 {
+	coinNumberFloat, _ := new(big.Float).SetInt(coinNumber).Float64()
+	coinNumberFloat /= 1e18
+	return coinNumberFloat
 }

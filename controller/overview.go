@@ -54,11 +54,21 @@ func GetOverView() gin.HandlerFunc {
 		totalBalanceInUSD := new(big.Float)
 		balanceInUSCBTC := new(big.Float)
 		for _, token := range constants.TOKEN_LIST {
-			tokenBalance, errorBalance := services.TokenBalance(token.Address, user.WalletAddress)
-			if errorBalance != nil {
-				log.Fatal("Error getting token balance: ", errorBalance)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": errorBalance.Error()})
+			tokenBalance := new(big.Float)
+			if token.Symbol == "BNB" {
+				tokenBalance, err = services.GetBNBBalance(user.WalletAddress)
+				if err != nil {
+					log.Fatal("Error getting BNB balance: ", err)
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				}
+			} else {
+				tokenBalance, err = services.TokenBalance(token.Address, user.WalletAddress)
+				if err != nil {
+					log.Fatal("Error getting token balance: ", err)
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				}
 			}
+
 			balanceInUSD := new(big.Float)
 			percentChange24H := new(big.Float)
 			volume24H := new(big.Float)
