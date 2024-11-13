@@ -13,6 +13,11 @@ var TOKEN_LIST = []Token{
 		Symbol:  "BTC",
 	},
 	{
+		Name:    "Bitcoin BEP2",
+		Address: "0x6ce8dA28E2f864420840cF74474eFf5fD80E65B8",
+		Symbol:  "BTCB",
+	},
+	{
 		Name:    "BNB",
 		Address: "0xb8c77482e45f1f44de1745f52c74426c631bdd52",
 		Symbol:  "BNB",
