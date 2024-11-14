@@ -18,6 +18,7 @@ type GetTransferFeeResponse struct {
 	TokenAddress   string  `json:"tokenAddress"`
 	TokenSymbol    string  `json:"tokenSymbol"`
 	WalletAddress  string  `json:"walletAddress"`
+	ToAddress      string  `json:"toAddress"`
 }
 
 type TransferToAddressResponse struct {

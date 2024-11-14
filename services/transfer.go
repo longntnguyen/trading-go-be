@@ -300,7 +300,7 @@ func GetTransferFee(fromAddress, toAddress, privateKeyHex, tokenAddress string, 
 	// Find the symbol of the tokenAddress
 	var tokenSymbol string
 	for _, token := range constants.TOKEN_LIST {
-		if token.Address == tokenAddress {
+		if strings.EqualFold(token.Address, tokenAddress) {
 			tokenSymbol = token.Symbol
 			break
 		}
@@ -330,6 +330,7 @@ func GetTransferFee(fromAddress, toAddress, privateKeyHex, tokenAddress string, 
 		Amount:         amountFloat,
 		TokenAddress:   tokenAddress,
 		WalletAddress:  fromAddress,
+		ToAddress:      toAddress,
 		TransactionFee: transactionFee,
 		TokenSymbol:    tokenSymbol,
 	}, nil
