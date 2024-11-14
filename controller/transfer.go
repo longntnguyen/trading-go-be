@@ -52,13 +52,12 @@ func TransferToAddress() gin.HandlerFunc {
 			return
 		}
 		bigAmount := big.NewFloat(amount)
-		_, transferErr := services.SendToken(user.WalletAddress, transfer.ToAddress, user.PrivateKey, transfer.TokenAddress, bigAmount)
+		transferId, transferErr := services.SendToken(user.WalletAddress, transfer.ToAddress, user.PrivateKey, transfer.TokenAddress, bigAmount)
 		if transferErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": transferErr.Error()})
 			return
 		}
-
-		c.JSON(http.StatusOK, gin.H{"message": "Transfer success"})
+		res.Data = model.TransferToAddressResponse{TransactionId: transferId}
 	}
 }
 

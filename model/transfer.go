@@ -19,3 +19,7 @@ type GetTransferFeeResponse struct {
 	TokenSymbol    string  `json:"tokenSymbol"`
 	WalletAddress  string  `json:"walletAddress"`
 }
+
+type TransferToAddressResponse struct {
+	TransactionId string `json:"transactionId"`
+}
