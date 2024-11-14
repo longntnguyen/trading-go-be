@@ -301,7 +301,7 @@ func GetTransferFee(fromAddress, toAddress, privateKeyHex, tokenAddress string, 
 	var tokenSymbol string
 	for _, token := range constants.TOKEN_LIST {
 		if token.Address == tokenAddress {
-			tokenSymbol = token.Address
+			tokenSymbol = token.Symbol
 			break
 		}
 	}
@@ -341,6 +341,7 @@ func CovertCoinNumber(coinNumber *big.Int) float64 {
 	coinNumberFloat /= 1e18
 	return coinNumberFloat
 }
+
 // SwapToken swaps a specified amount of one token for another using a decentralized exchange
 func SwapToken(fromAddress, privateKeyHex, fromTokenAddress, toTokenAddress string, amount *big.Float) (string, error) {
 	// Connect to the Ethereum client
