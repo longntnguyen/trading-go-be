@@ -40,10 +40,11 @@ func GetListTokenInfo(page, limit int) ([]model.ListTokenInfo, error) {
 		for _, tokenInfo := range listTokenInfo {
 			if token.Symbol == tokenInfo.Symbol {
 				tokenList = append(tokenList, model.ListTokenInfo{
-					TokenID:   tokenInfo.TokenID.String(),
-					Symbol:    tokenInfo.Symbol,
-					TokenName: token.Name,
-					ImageUrl:  "https://s2.coinmarketcap.com/static/img/coins/64x64/" + tokenInfo.TokenID.String(),
+					TokenID:      tokenInfo.TokenID.String(),
+					Symbol:       tokenInfo.Symbol,
+					TokenName:    token.Name,
+					ImageUrl:     "https://s2.coinmarketcap.com/static/img/coins/64x64/" + tokenInfo.TokenID.String() + ".png",
+					TokenAddress: token.Address,
 				})
 			}
 		}
@@ -57,7 +58,7 @@ func GetTokenUrls(idStrings []string) (map[int]string, error) {
 	if len(idStrings) == 0 {
 		return response, nil
 	}
-	url := fmt.Sprintf("https://pro-api.coinmarketcap.com/v2/cryptocurrency/info?id=%s", strings.Join(idStrings, ","))
+	url := fmt.Sprintf("https://pro-api.coinmarketcap.com/v2/cryptocurrency/info?id=%s", strings.Join(idStrings, ",")+".png")
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)

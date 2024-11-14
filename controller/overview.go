@@ -103,7 +103,7 @@ func GetOverView() gin.HandlerFunc {
 				Volume24H:        *volume24H,
 				MarketCap:        *marketCap,
 				Symbol:           token.Symbol,
-				ImageUrl:         fmt.Sprintf("https://s2.coinmarketcap.com/static/img/coins/64x64/%s.png", tokenId),
+				ImageUrl:         fmt.Sprintf("https://s2.coinmarketcap.com/static/img/coins/64x64/%s.png", tokenId.Text('f', -1)),
 			})
 		}
 		totalBalanceInUSDFloat64, _ := totalBalanceInUSD.Float64()

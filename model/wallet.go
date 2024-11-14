@@ -57,10 +57,11 @@ type ListTokenInfoResponse struct {
 }
 
 type ListTokenInfo struct {
-	TokenID   string `json:"tokenID"`
-	Symbol    string `json:"symbol"`
-	TokenName string `json:"tokenName"`
-	ImageUrl  string `json:"imageUrl"`
+	TokenID      string `json:"tokenID"`
+	Symbol       string `json:"symbol"`
+	TokenName    string `json:"tokenName"`
+	ImageUrl     string `json:"imageUrl"`
+	TokenAddress string `json:"tokenAddress"`
 }
 
 type CoinMarketCapStatus struct {

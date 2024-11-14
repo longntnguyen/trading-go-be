@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -339,4 +340,83 @@ func CovertCoinNumber(coinNumber *big.Int) float64 {
 	coinNumberFloat, _ := new(big.Float).SetInt(coinNumber).Float64()
 	coinNumberFloat /= 1e18
 	return coinNumberFloat
+}
+// SwapToken swaps a specified amount of one token for another using a decentralized exchange
+func SwapToken(fromAddress, privateKeyHex, fromTokenAddress, toTokenAddress string, amount *big.Float) (string, error) {
+	// Connect to the Ethereum client
+	client, err := ethclient.Dial(os.Getenv("CLIENT_URL"))
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to the Ethereum client: %v", err)
+	}
+
+	// Convert the private key from hex to ECDSA
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert private key: %v", err)
+	}
+
+	// Get the nonce for the account
+	fromAddr := common.HexToAddress(fromAddress)
+	nonce, err := client.NonceAt(context.Background(), fromAddr, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to get nonce: %v", err)
+	}
+
+	// Get the gas price
+	gasPrice, err := client.SuggestGasPrice(context.Background())
+	if err != nil {
+		return "", fmt.Errorf("failed to get gas price: %v", err)
+	}
+
+	// Load the Uniswap router contract ABI
+	routerABI, err := abi.JSON(strings.NewReader(`[{"constant":false,"inputs":[{"name":"amountIn","type":"uint256"},{"name":"amountOutMin","type":"uint256"},{"name":"path","type":"address[]"},{"name":"to","type":"address"},{"name":"deadline","type":"uint256"}],"name":"swapExactTokensForTokens","outputs":[{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"nonpayable","type":"function"}]`))
+	if err != nil {
+		return "", fmt.Errorf("failed to parse router contract ABI: %v", err)
+	}
+
+	// Convert amount to *big.Int
+	amountInt := new(big.Int)
+	amount.Mul(amount, big.NewFloat(1e18)).Int(amountInt)
+
+	// Create the swap data
+	routerAddress := common.HexToAddress(os.Getenv("UNISWAP_ROUTER_ADDRESS"))
+	toAddr := common.HexToAddress(fromAddress)
+	path := []common.Address{common.HexToAddress(fromTokenAddress), common.HexToAddress(toTokenAddress)}
+	deadline := big.NewInt(time.Now().Add(time.Minute * 15).Unix())
+	data, err := routerABI.Pack("swapExactTokensForTokens", amountInt, big.NewInt(1), path, toAddr, deadline)
+	if err != nil {
+		return "", fmt.Errorf("failed to pack swap data: %v", err)
+	}
+
+	// Estimate the gas limit
+	msg := ethereum.CallMsg{
+		From: fromAddr,
+		To:   &routerAddress,
+		Data: data,
+	}
+	gasLimit, err := client.EstimateGas(context.Background(), msg)
+	if err != nil {
+		return "", fmt.Errorf("failed to estimate gas limit: %v", err)
+	}
+
+	// Create the transaction
+	tx := types.NewTransaction(nonce, routerAddress, big.NewInt(0), gasLimit, gasPrice, data)
+
+	// Sign the transaction
+	chainID, err := client.NetworkID(context.Background())
+	if err != nil {
+		return "", fmt.Errorf("failed to get chain ID: %v", err)
+	}
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), privateKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign transaction: %v", err)
+	}
+
+	// Send the transaction
+	err = client.SendTransaction(context.Background(), signedTx)
+	if err != nil {
+		return "", fmt.Errorf("failed to send transaction: %v", err)
+	}
+
+	return signedTx.Hash().Hex(), nil
 }
