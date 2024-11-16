@@ -86,7 +86,6 @@ func TokenBalance(contractAddress, accountAddress string) (*big.Float, error) {
 	// Parse the result
 	balance := new(big.Int)
 	balance.SetBytes(result)
-	fmt.Println("balance: ", balance, contractAddress, accountAddress)
 
 	divisor := big.NewFloat(1000000000000000000)
 	balanceFloat := new(big.Float).SetInt(balance)

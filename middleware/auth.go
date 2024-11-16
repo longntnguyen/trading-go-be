@@ -14,7 +14,7 @@ import (
 
 var userCollection *mongo.Collection = database.CollectionDB("user")
 
-func Authenticate() gin.HandlerFunc{
+func Authenticate() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		clientToken := c.Request.Header.Get("Authorization")
 		if clientToken == "" {
@@ -27,7 +27,7 @@ func Authenticate() gin.HandlerFunc{
 			c.JSON(http.StatusUnauthorized, gin.H{"error": errToken.Error()})
 			c.Abort()
 			return
-		} 
+		}
 		var user model.User
 		err := userCollection.FindOne(context.Background(), bson.D{{Key: "user_id", Value: userId}}).Decode(&user)
 		if err != nil {

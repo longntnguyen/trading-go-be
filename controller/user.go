@@ -245,13 +245,14 @@ func GetUserInfo() gin.HandlerFunc {
 	}
 }
 
-func GetUserBalance() gin.HandlerFunc {
+func GetUserBalanceByToken() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Content-Type", "application/json")
 		res := &Response{}
 		defer json.NewEncoder(c.Writer).Encode(res)
 
 		token := c.Request.Header.Get("Authorization")
+		tokenAddress := c.Query("tokenAddress")
 		userId, errToken := services.GetUserIdFromToken(token)
 		if errToken != nil {
 			c.Writer.WriteHeader(http.StatusUnauthorized)
@@ -267,28 +268,34 @@ func GetUserBalance() gin.HandlerFunc {
 			res.Error = err.Error()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
-		var req model.GetUserBalanceByTokenRequest
-		err = json.NewDecoder(c.Request.Body).Decode(&req)
+		tokenInformation, err := services.GetTokenByAddress(tokenAddress)
 		if err != nil {
-			c.Writer.WriteHeader(http.StatusBadRequest)
-			log.Println("Error decoding request body: ", err)
-			res.Error = err.Error()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
 
 		}
-		balance, err := services.TokenBalance(req.TokenAddress, user.WalletAddress)
+		if tokenInformation.Symbol == "BNB" {
+			balance, err := services.GetBNBBalance(user.WalletAddress)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+
+			}
+			balanceRes, _ := balance.Float64()
+			res.Data = model.GetUserBalanceByTokenResponse{
+				Balance:   balanceRes,
+				Symbol:    tokenInformation.Symbol,
+				TokenName: tokenInformation.TokenName,
+			}
+			return
+		}
+		balance, err := services.TokenBalance(tokenAddress, user.WalletAddress)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 
 		}
 		balanceRes, _ := balance.Float64()
-		tokenInformation, err := services.GetTokenByAddress(req.TokenAddress)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-
-		}
 
 		res.Data = model.GetUserBalanceByTokenResponse{
 			Balance:   balanceRes,
