@@ -84,3 +84,37 @@ func GetTokenUrls(idStrings []string) (map[int]string, error) {
 	}
 	return response, nil
 }
+
+func GetTokenByAddress(tokenAddress string) (model.ListTokenInfo, error) {
+	apiKey := os.Getenv("COINMARKETCAP_API_KEY")
+
+	// Get list token map, using: https://pro-api.coinmarketcap.com/v1/cryptocurrency/map
+	url := fmt.Sprintf("https://pro-api.coinmarketcap.com/v1/cryptocurrency/map?start=%d&limit=%d", page, limit)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return model.ListTokenInfo{}, fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Add("X-CMC_PRO_API_KEY", apiKey)
+	symbols := []string{tokenAddress}
+	listTokenInfo, tokenPricesErr := GetTokenPrice(symbols)
+	if tokenPricesErr != nil {
+		return model.ListTokenInfo{}, tokenPricesErr
+	}
+	tokenInformation := model.ListTokenInfo{}
+	for _, token := range constants.TOKEN_LIST {
+		for _, tokenInfo := range listTokenInfo {
+			if token.Symbol == tokenInfo.Symbol {
+				tokenInformation = model.ListTokenInfo{
+					TokenID:      tokenInfo.TokenID.String(),
+					Symbol:       tokenInfo.Symbol,
+					TokenName:    token.Name,
+					ImageUrl:     "https://s2.coinmarketcap.com/static/img/coins/64x64/" + tokenInfo.TokenID.String() + ".png",
+					TokenAddress: token.Address,
+				}
+				break
+			}
+		}
+	}
+	return tokenInformation, nil
+}

@@ -20,16 +20,15 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-
-var userCollection *mongo.Collection = database.CollectionDB("user") 
+var userCollection *mongo.Collection = database.CollectionDB("user")
 
 type UserService struct {
 	MongoCollection *mongo.Collection
 }
 
 type Response struct {
-	Data	interface{}	`json:"data,omitempty"`
-	Error	string		`json:"error,omitempty"`
+	Data  interface{} `json:"data,omitempty"`
+	Error string      `json:"error,omitempty"`
 }
 
 func SignUp() gin.HandlerFunc {
@@ -37,7 +36,7 @@ func SignUp() gin.HandlerFunc {
 		c.Writer.Header().Set("Content-Type", "application/json")
 		res := &Response{}
 		defer json.NewEncoder(c.Writer).Encode(res)
-	
+
 		var emp model.User
 		err := json.NewDecoder(c.Request.Body).Decode(&emp)
 		if err != nil {
@@ -47,12 +46,12 @@ func SignUp() gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
 
-		if emp.Email == "" || emp.Password == ""  {
+		if emp.Email == "" || emp.Password == "" {
 			c.Writer.WriteHeader(http.StatusBadRequest)
 			log.Println("Missing required fields")
 			res.Error = "Missing required fields"
 			return
-			
+
 		}
 		var user model.User
 		err = userCollection.FindOne(context.Background(), bson.D{{Key: "email", Value: emp.Email}}).Decode(&user)
@@ -78,29 +77,29 @@ func SignUp() gin.HandlerFunc {
 			res.Error = err.Error()
 			return
 		}
-	
+
 		emp.UserID = uuid.New().String()
 		emp.Password = hashedPassword
 		emp.WalletAddress = walletAddress
 		emp.PrivateKey = privateKey
-		_, err = userCollection.InsertOne(context.Background(), &emp) 
+		_, err = userCollection.InsertOne(context.Background(), &emp)
 		var newUser model.User
 		fmt.Println(emp, "emp")
 		newUserErr := userCollection.FindOne(context.Background(), bson.D{{Key: "user_id", Value: emp.UserID}}).Decode(&newUser)
 		if newUserErr != nil {
 			c.Writer.WriteHeader(http.StatusInternalServerError)
 			log.Println("Error finding user: ", newUserErr)
-			res.Error = newUserErr.Error() 
+			res.Error = newUserErr.Error()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": newUserErr.Error()})
-			
+
 		}
 		if err != nil {
 			c.Writer.WriteHeader(http.StatusInternalServerError)
 			log.Println("Error creating user: ", err)
-			res.Error = err.Error() 
+			res.Error = err.Error()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
-	
+
 		token, err := services.CreateToken(newUser.UserID)
 		if err != nil {
 			c.Writer.WriteHeader(http.StatusInternalServerError)
@@ -112,13 +111,13 @@ func SignUp() gin.HandlerFunc {
 		res.Data = model.LoginResponse{
 			Token: token,
 			User: model.UserLoginResponse{
-				Email: newUser.Email,
-				Name: newUser.Name,
-				UserID: newUser.UserID,
+				Email:         newUser.Email,
+				Name:          newUser.Name,
+				UserID:        newUser.UserID,
 				WalletAddress: newUser.WalletAddress,
 			},
 		}
-		c.Writer.WriteHeader(http.StatusOK) 
+		c.Writer.WriteHeader(http.StatusOK)
 	}
 }
 
@@ -127,7 +126,7 @@ func Login() gin.HandlerFunc {
 		c.Writer.Header().Set("Content-Type", "application/json")
 		res := &Response{}
 		defer json.NewEncoder(c.Writer).Encode(res)
-	
+
 		var emp model.User
 		err := json.NewDecoder(c.Request.Body).Decode(&emp)
 		if err != nil {
@@ -136,24 +135,24 @@ func Login() gin.HandlerFunc {
 			res.Error = err.Error()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
-	
+
 		var user model.User
 		err = userCollection.FindOne(context.Background(), bson.D{{Key: "email", Value: emp.Email}}).Decode(&user)
 		if err != nil {
 			c.Writer.WriteHeader(http.StatusInternalServerError)
 			log.Println("Error finding user: ", err)
-			res.Error = err.Error() 
+			res.Error = err.Error()
 			return
 		}
 		validPassword := services.ComparePasswords(emp.Password, user.Password)
-	
+
 		if !validPassword {
 			c.Writer.WriteHeader(http.StatusUnauthorized)
 			log.Println("Incorrect password")
-			res.Error = "Incorrect password" 
+			res.Error = "Incorrect password"
 			return
 		}
-	
+
 		token, err := services.CreateToken(user.UserID)
 		if err != nil {
 			c.Writer.WriteHeader(http.StatusInternalServerError)
@@ -165,9 +164,9 @@ func Login() gin.HandlerFunc {
 		res.Data = model.LoginResponse{
 			Token: token,
 			User: model.UserLoginResponse{
-				Email: user.Email,
-				Name: user.Name,
-				UserID: user.UserID,
+				Email:         user.Email,
+				Name:          user.Name,
+				UserID:        user.UserID,
 				WalletAddress: user.WalletAddress,
 			},
 		}
@@ -175,12 +174,12 @@ func Login() gin.HandlerFunc {
 	}
 }
 
-func GetUserInfo() gin.HandlerFunc{
+func GetUserInfo() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Content-Type", "application/json")
 		res := &Response{}
 		defer json.NewEncoder(c.Writer).Encode(res)
-	
+
 		token := c.Request.Header.Get("Authorization")
 		userId, errToken := services.GetUserIdFromToken(token)
 		if errToken != nil {
@@ -190,20 +189,20 @@ func GetUserInfo() gin.HandlerFunc{
 			c.JSON(http.StatusUnauthorized, gin.H{"error": errToken.Error()})
 		}
 		var user model.User
-		err := userCollection.FindOne(context.Background(), bson.D{{Key: "user_id", Value: userId}}).Decode(&user) 
+		err := userCollection.FindOne(context.Background(), bson.D{{Key: "user_id", Value: userId}}).Decode(&user)
 		if err != nil {
 			c.Writer.WriteHeader(http.StatusInternalServerError)
 			log.Println("Error decoding user: ", err)
 			res.Error = err.Error()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		} 
+		}
 
 		userInfoResponse := model.GetUserInfoResponse{
 			TokenBalance: []model.TokenBalance{},
 			User: model.UserLoginResponse{
-				Email: user.Email,
-				Name: user.Name,
-				UserID: user.UserID,
+				Email:         user.Email,
+				Name:          user.Name,
+				UserID:        user.UserID,
 				WalletAddress: user.WalletAddress,
 			},
 		}
@@ -216,7 +215,7 @@ func GetUserInfo() gin.HandlerFunc{
 		if tokenPricesErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": tokenPricesErr.Error()})
 			log.Fatal("Error getting token prices: ", tokenPricesErr)
-			
+
 		}
 
 		for _, token := range constants.TOKEN_LIST {
@@ -235,13 +234,67 @@ func GetUserInfo() gin.HandlerFunc{
 			balanceInUSDFloat, _ := balanceInUSD.Float64()
 			balanceInUSD.SetFloat64(math.Round(balanceInUSDFloat*1e6) / 1e6)
 			userInfoResponse.TokenBalance = append(userInfoResponse.TokenBalance, model.TokenBalance{
-				TokenName: token.Name,
-				Balance: *tokenBalance,
+				TokenName:    token.Name,
+				Balance:      *tokenBalance,
 				BalanceInUSD: *balanceInUSD,
 			})
 		}
-	
+
 		res.Data = userInfoResponse
-		c.Writer.WriteHeader(http.StatusOK) 
+		c.Writer.WriteHeader(http.StatusOK)
+	}
+}
+
+func GetUserBalance() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Content-Type", "application/json")
+		res := &Response{}
+		defer json.NewEncoder(c.Writer).Encode(res)
+
+		token := c.Request.Header.Get("Authorization")
+		userId, errToken := services.GetUserIdFromToken(token)
+		if errToken != nil {
+			c.Writer.WriteHeader(http.StatusUnauthorized)
+			log.Println("Error decoding user: ", errToken)
+			res.Error = errToken.Error()
+			c.JSON(http.StatusUnauthorized, gin.H{"error": errToken.Error()})
+		}
+		var user model.User
+		err := userCollection.FindOne(context.Background(), bson.D{{Key: "user_id", Value: userId}}).Decode(&user)
+		if err != nil {
+			c.Writer.WriteHeader(http.StatusInternalServerError)
+			log.Println("Error decoding user: ", err)
+			res.Error = err.Error()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		var req model.GetUserBalanceByTokenRequest
+		err = json.NewDecoder(c.Request.Body).Decode(&req)
+		if err != nil {
+			c.Writer.WriteHeader(http.StatusBadRequest)
+			log.Println("Error decoding request body: ", err)
+			res.Error = err.Error()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+
+		}
+		balance, err := services.TokenBalance(req.TokenAddress, user.WalletAddress)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+
+		}
+		balanceRes, _ := balance.Float64()
+		tokenInformation, err := services.GetTokenByAddress(req.TokenAddress)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+
+		}
+
+		res.Data = model.GetUserBalanceByTokenResponse{
+			Balance:   balanceRes,
+			Symbol:    tokenInformation.Symbol,
+			TokenName: tokenInformation.TokenName,
+		}
+
 	}
 }
