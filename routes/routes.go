@@ -23,6 +23,7 @@ func UserAuthRoutes(router *gin.RouterGroup) {
 	router.POST("/transfer", controller.TransferToAddress())
 	router.POST("/transfer-fee", controller.GetTransferFee())
 	router.GET("/token-info", controller.GetUserBalanceByToken())
+	router.POST("/swap-token", controller.SwapToken())
 }
 
 func UsePublicRoutes(router *gin.Engine) {

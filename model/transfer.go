@@ -24,3 +24,13 @@ type GetTransferFeeResponse struct {
 type TransferToAddressResponse struct {
 	TransactionId string `json:"transactionId"`
 }
+
+type SwapTokenRequest struct {
+	FromTokenAddress string      `json:"fromTokenAddress"`
+	ToTokenAddress   string      `json:"toTokenAddress"`
+	Amount           json.Number `json:"amount"`
+}
+
+type SwapTokenResponse struct {
+	TransactionId string `json:"transactionId"`
+}

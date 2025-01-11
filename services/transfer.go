@@ -216,8 +216,15 @@ func SendToken(fromAddress, toAddress, privateKeyHex, tokenAddress string, amoun
 		Data: data,
 	}
 	gasLimit, err := client.EstimateGas(context.Background(), msg)
+	fmt.Println("Gas limit: ", gasLimit)
 	if err != nil {
-		return "", fmt.Errorf("failed to estimate gas limit: %v", err)
+		// Retry with a higher gas price
+		gasPrice = new(big.Int).Add(gasPrice, big.NewInt(1e9)) // Increase gas price slightly
+		msg.GasPrice = gasPrice
+		gasLimit, err = client.EstimateGas(context.Background(), msg)
+		if err != nil {
+			return "", fmt.Errorf("failed to estimate gas limit after retry: %v", err)
+		}
 	}
 
 	// Calculate the total cost (gas limit * gas price)
@@ -343,7 +350,7 @@ func CovertCoinNumber(coinNumber *big.Int) float64 {
 }
 
 // SwapToken swaps a specified amount of one token for another using a decentralized exchange
-func SwapToken(fromAddress, privateKeyHex, fromTokenAddress, toTokenAddress string, amount *big.Float) (string, error) {
+func SwapToken(fromAddress, fromTokenAddress, privateKeyHex, toTokenAddress string, amount *big.Float) (string, error) {
 	// Connect to the Ethereum client
 	client, err := ethclient.Dial(os.Getenv("CLIENT_URL"))
 	if err != nil {
@@ -385,9 +392,15 @@ func SwapToken(fromAddress, privateKeyHex, fromTokenAddress, toTokenAddress stri
 	path := []common.Address{common.HexToAddress(fromTokenAddress), common.HexToAddress(toTokenAddress)}
 	deadline := big.NewInt(time.Now().Add(time.Minute * 15).Unix())
 	data, err := routerABI.Pack("swapExactTokensForTokens", amountInt, big.NewInt(1), path, toAddr, deadline)
+	fmt.Println("path: ", path)
 	if err != nil {
 		return "", fmt.Errorf("failed to pack swap data: %v", err)
 	}
+	// txHash, err := CheckAllowance(fromAddress, privateKeyHex, fromTokenAddress, amountInt)
+	// if err != nil {
+	// 	return "", fmt.Errorf("failed to check allowance: %v", err)
+	// }
+	fmt.Println("Allowance: ", routerAddress, fromAddr)
 
 	// Estimate the gas limit
 	msg := ethereum.CallMsg{
@@ -397,11 +410,108 @@ func SwapToken(fromAddress, privateKeyHex, fromTokenAddress, toTokenAddress stri
 	}
 	gasLimit, err := client.EstimateGas(context.Background(), msg)
 	if err != nil {
-		return "", fmt.Errorf("failed to estimate gas limit: %v", err)
+		// Retry with a higher gas price
+		gasPrice = new(big.Int).Add(gasPrice, big.NewInt(1e9)) // Increase gas price slightly
+		msg.GasPrice = gasPrice
+		gasLimit, err = client.EstimateGas(context.Background(), msg)
+		if err != nil {
+			return "", fmt.Errorf("failed to estimate gas limit after retry: %v", err)
+		}
 	}
 
 	// Create the transaction
 	tx := types.NewTransaction(nonce, routerAddress, big.NewInt(0), gasLimit, gasPrice, data)
+
+	// Sign the transaction
+	chainID, err := client.NetworkID(context.Background())
+	if err != nil {
+		return "", fmt.Errorf("failed to get chain ID: %v", err)
+	}
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), privateKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign transaction: %v", err)
+	}
+	fmt.Println("Signed transaction: ")
+
+	// Send the transaction
+	err = client.SendTransaction(context.Background(), signedTx)
+	if err != nil {
+		if strings.Contains(err.Error(), "nonce too low") || strings.Contains(err.Error(), "could not replace existing tx") {
+			nonce, err = client.PendingNonceAt(context.Background(), fromAddr)
+			if err != nil {
+				return "", fmt.Errorf("failed to get updated nonce: %v", err)
+			}
+			gasPrice = new(big.Int).Add(gasPrice, big.NewInt(1e9)) // Increase gas price slightly
+			tx = types.NewTransaction(nonce, routerAddress, big.NewInt(0), gasLimit, gasPrice, data)
+			signedTx, err = types.SignTx(tx, types.NewEIP155Signer(chainID), privateKey)
+			if err != nil {
+				return "", fmt.Errorf("failed to sign transaction: %v", err)
+			}
+			err = client.SendTransaction(context.Background(), signedTx)
+			if err != nil {
+				return "", fmt.Errorf("failed to send transaction after updating nonce: %v", err)
+			}
+		} else {
+			return "", fmt.Errorf("failed to send transaction: %v", err)
+		}
+	}
+
+	return signedTx.Hash().Hex(), nil
+}
+
+// CheckAllowance checks the allowance granted to the PancakeSwap Router contract
+func CheckAllowance(fromAddress, privateKeyHex, tokenAddress string, amount *big.Int) (string, error) {
+	// Connect to the Ethereum client
+	client, err := ethclient.Dial(os.Getenv("CLIENT_URL"))
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to the Ethereum client: %v", err)
+	}
+
+	// Convert the private key from hex to ECDSA
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert private key: %v", err)
+	}
+
+	// Get the nonce for the account
+	fromAddr := common.HexToAddress(fromAddress)
+	nonce, err := client.PendingNonceAt(context.Background(), fromAddr)
+	if err != nil {
+		return "", fmt.Errorf("failed to get nonce: %v", err)
+	}
+
+	// Get the gas price
+	gasPrice, err := client.SuggestGasPrice(context.Background())
+	if err != nil {
+		return "", fmt.Errorf("failed to get gas price: %v", err)
+	}
+
+	// Load the ERC-20 token contract ABI
+	tokenABI, err := abi.JSON(strings.NewReader(`[{"constant":false,"inputs":[{"name":"spender","type":"address"},{"name":"value","type":"uint256"}],"name":"approve","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"}]`))
+	if err != nil {
+		return "", fmt.Errorf("failed to parse token contract ABI: %v", err)
+	}
+
+	// Create the approval data
+	spender := common.HexToAddress(os.Getenv("UNISWAP_ROUTER_ADDRESS"))
+	data, err := tokenABI.Pack("approve", spender, amount)
+	if err != nil {
+		return "", fmt.Errorf("failed to pack approval data: %v", err)
+	}
+
+	// Estimate the gas limit
+	msg := ethereum.CallMsg{
+		From: fromAddr,
+		To:   &spender,
+		Data: data,
+	}
+	gasLimit, err := client.EstimateGas(context.Background(), msg)
+	if err != nil {
+		return "", fmt.Errorf("failed to estimate gas limit: %v", err)
+	}
+
+	// Create the transaction
+	tx := types.NewTransaction(nonce, spender, big.NewInt(0), gasLimit, gasPrice, data)
 
 	// Sign the transaction
 	chainID, err := client.NetworkID(context.Background())

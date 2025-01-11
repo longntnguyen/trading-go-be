@@ -17,6 +17,7 @@ import (
 
 func GetOverView() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Check login
 		c.Writer.Header().Set("Content-Type", "application/json")
 		res := &Response{}
 		defer json.NewEncoder(c.Writer).Encode(res)
@@ -35,6 +36,7 @@ func GetOverView() gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		// get Token information
 		var symbols []string
 		for _, token := range constants.TOKEN_LIST {
 			symbols = append(symbols, token.Symbol)

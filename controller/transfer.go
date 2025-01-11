@@ -107,3 +107,49 @@ func GetTransferFee() gin.HandlerFunc {
 		c.Writer.WriteHeader(http.StatusOK)
 	}
 }
+
+func SwapToken() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Content-Type", "application/json")
+		res := &Response{}
+		defer json.NewEncoder(c.Writer).Encode(res)
+
+		var swap model.SwapTokenRequest
+		err := json.NewDecoder(c.Request.Body).Decode(&swap)
+		if err != nil {
+			c.Writer.WriteHeader(http.StatusBadRequest)
+			log.Println("Error decoding request body: ", err)
+			res.Error = err.Error()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+
+		userId, err := services.GetUserIdFromToken(c.Request.Header.Get("Authorization"))
+
+		if err != nil {
+			c.Writer.WriteHeader(http.StatusInternalServerError)
+			log.Println("Error decoding user: ", err)
+			res.Error = err.Error()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+
+		var user model.User
+		err = userCollection.FindOne(context.Background(), bson.D{{Key: "user_id", Value: userId}}).Decode(&user)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		amount, err := swap.Amount.Float64()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		bigAmount := big.NewFloat(amount)
+		swapId, swapErr := services.SwapToken(user.WalletAddress, swap.FromTokenAddress, user.PrivateKey, swap.ToTokenAddress, bigAmount)
+		if swapErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": swapErr.Error()})
+			return
+		}
+		res.Data = model.SwapTokenResponse{TransactionId: swapId}
+	}
+}
